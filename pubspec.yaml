@@ -1,0 +1,48 @@
+name: bideshibazar
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_auth_2: ^4.0.4
+  webview_flutter: ^4.2.2
+  connectivity_plus: ^5.0.1
+  package_info_plus: ^6.0.0
+  google_sign_in: ^6.1.4
+  cupertino_icons: ^1.0.8
+  flutter_custom_tabs: ^1.0.4
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.13.1
+  flutter_lints: ^5.0.0
+  flutter_native_splash: ^2.3.5
+
+flutter_icons:
+  android: true
+  ios: true
+  color: "#ffffff"
+  image_path: "assets/logo.jpg"
+
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/ic_launcher.png
+  android: true
+  ios: true
+  fullscreen: true
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/logo.jpg
+    - assets/ic_launcher.png
