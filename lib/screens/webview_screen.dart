@@ -1,7 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -11,96 +11,123 @@ class WebViewScreen extends StatefulWidget {
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
-  late final WebViewController _controller;
+  WebViewController? _controller;
   bool _isLoading = true;
   bool hasInternet = true;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+
+  late final StreamSubscription<InternetStatus> _internetSubscription;
+
+  static const String homeUrl = 'https://bideshibazar.com';
 
   @override
   void initState() {
     super.initState();
-    _checkInternet();
-    _controller = WebViewController()
+    _initializeWebViewController();
+    _initInternetListener();
+  }
+
+  Future<void> _initInternetListener() async {
+    // Initial connectivity check
+    hasInternet = await InternetConnection().hasInternetAccess;
+    if (mounted) setState(() {});
+
+    _internetSubscription =
+        InternetConnection().onStatusChange.listen((status) async {
+          final bool netAvailable = status == InternetStatus.connected;
+          if (!mounted) return;
+
+          if (netAvailable != hasInternet) {
+            setState(() => hasInternet = netAvailable);
+          }
+          // When internet returns, refresh the current page safely
+          if (netAvailable) await _reloadSafely();
+        });
+  }
+
+  @override
+  void dispose() {
+    _internetSubscription.cancel();
+    super.dispose();
+  }
+
+  void _initializeWebViewController() {
+    final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
+          onNavigationRequest: (request) {
+            // Prevent in‑app Google OAuth pop‑ups
+            if (request.url.contains('accounts.google.com/o/oauth2/auth')) {
+              _showGoogleLoginBlockedDialog();
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+          onWebResourceError: (error) {
+            // Detect offline errors inside WebView
+            if (error.errorType == WebResourceErrorType.hostLookup ||
+                error.errorType == WebResourceErrorType.connect) {
+              if (mounted) setState(() => hasInternet = false);
+            }
+          },
           onPageStarted: (_) => setState(() => _isLoading = true),
           onPageFinished: (_) => setState(() => _isLoading = false),
         ),
       )
-      ..loadRequest(Uri.parse('https://bideshibazar.com'));
-  }
+      ..loadRequest(Uri.parse(homeUrl));
 
-  Future<void> _checkInternet() async {
-    final result = await Connectivity().checkConnectivity();
     setState(() {
-      hasInternet = result != ConnectivityResult.none;
+      _controller = controller;
+      _isLoading = true;
     });
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    try {
-      final GoogleSignInAccount? account = await _googleSignIn.signIn();
-      if (account != null) {
-        final auth = await account.authentication;
-        final accessToken = auth.accessToken;
-        final idToken = auth.idToken;
-
-        final js = '''
-          document.cookie = "access_token=$accessToken; path=/;";
-          document.cookie = "id_token=$idToken; path=/;";
-        ''';
-        await _controller.runJavaScript(js);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Google Sign-In Successful")),
-        );
-      }
-    } catch (error) {
-      print("Sign-In Error: $error");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $error")),
-      );
-    }
+  /// Reloads current URL (or home page) using `loadRequest` to bypass failed cache
+  Future<void> _reloadSafely() async {
+    final urlString = await _controller?.currentUrl() ?? homeUrl;
+    _controller?.loadRequest(Uri.parse(urlString));
+    setState(() => _isLoading = true);
   }
 
   Future<void> _refreshPage() async {
-    await _checkInternet();
+    hasInternet = await InternetConnection().hasInternetAccess;
+    setState(() {});
+
     if (hasInternet) {
-      _controller.reload();
+      await _reloadSafely();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No internet connection!")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No internet connection!')),
+        );
+      }
     }
   }
 
+  void _showGoogleLoginBlockedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Login Not Supported'),
+        content: const Text(
+          'Google login is not supported inside the app. Please open in a browser.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<bool> _onWillPop() async {
-    if (await _controller.canGoBack()) {
-      _controller.goBack();
+    if (_controller != null && await _controller!.canGoBack()) {
+      _controller!.goBack();
       return false;
-    } else {
-      return await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text('Exit App?', style: TextStyle(color: Colors.black)),
-          content: const Text('Do you want to exit the app?', style: TextStyle(color: Colors.black)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('No', style: TextStyle(color: Colors.blue)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Yes', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        ),
-      ) ??
-          false;
     }
+    return true;
   }
 
   @override
@@ -117,18 +144,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
               icon: const Icon(Icons.refresh, color: Colors.black),
               onPressed: _refreshPage,
             ),
-            IconButton(
-              icon: const Icon(Icons.login, color: Colors.green),
-              onPressed: _handleGoogleSignIn,
-            ),
           ],
         ),
         body: hasInternet
             ? Stack(
           children: [
-            WebViewWidget(controller: _controller),
-            if (_isLoading)
-              const Center(child: CircularProgressIndicator()),
+            if (_controller != null) WebViewWidget(controller: _controller!),
+            if (_isLoading) const Center(child: CircularProgressIndicator()),
           ],
         )
             : Center(
@@ -143,7 +165,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
               ),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: _checkInternet,
+                onPressed: _refreshPage,
                 child: const Text('Try again'),
               ),
             ],

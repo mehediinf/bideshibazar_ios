@@ -11,10 +11,10 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_web_auth_2: ^4.0.4
-  webview_flutter: ^4.2.2
+  internet_connection_checker_plus: ^2.0.0
+  webview_flutter: ^4.7.0
   connectivity_plus: ^5.0.1
   package_info_plus: ^6.0.0
-  google_sign_in: ^6.1.4
   cupertino_icons: ^1.0.8
   flutter_custom_tabs: ^1.0.4
 
