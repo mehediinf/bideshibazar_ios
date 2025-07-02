@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'google_login_page.dart';
 import 'screens/splash_screen.dart';
+import 'apple_login_page.dart';
+import 'screens/webview_screen.dart';          // ✅ তোমার WebView স্ক্রিন
 
 void main() {
   runApp(const MyApp());
@@ -49,6 +52,15 @@ class MyApp extends StatelessWidget {
           bodyMedium: TextStyle(color: Colors.black),
         ),
       ),
+
+      // ✅ এখানেই routes বসাও
+      routes: {
+        '/login/apple': (_) => const AppleLoginPage(),
+        '/login/google': (_) => const GoogleLoginPage(),
+        '/home': (_) => const WebViewScreen(),
+      },
+
+
       home: const SplashScreen(),
     );
   }

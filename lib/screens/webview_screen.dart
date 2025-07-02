@@ -51,10 +51,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (request) {
-            if (request.url.contains('accounts.google.com/o/oauth2/auth')) {
-              _showGoogleLoginBlockedDialog();
+            final url = request.url;
+
+            // ✅ Detect Google login URL
+            if (url.contains('accounts.google.com/o/oauth2/auth')) {
+              Navigator.pushNamed(context, '/login/google');
               return NavigationDecision.prevent;
             }
+
+            // ✅ Detect Apple login redirect (optional)
+            if (url.contains('appleid.apple.com/auth/authorize')) {
+              Navigator.pushNamed(context, '/login/apple');
+              return NavigationDecision.prevent;
+            }
+
             return NavigationDecision.navigate;
           },
           onWebResourceError: (error) {
@@ -88,46 +98,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
       await _reloadSafely();
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No internet connection!')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No internet connection!')));
       }
     }
-  }
-
-  /// Shows a blocking overlay spinner for [seconds] seconds.
-  Future<void> _showTemporarySpinner(int seconds) async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
-    await Future.delayed(Duration(seconds: seconds));
-    // Leave _isLoading true so that when login page starts loading the spinner remains visible
-  }
-
-  void _showGoogleLoginBlockedDialog() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Login Not Supported'),
-        content: const Text('Google login is not supported inside the app. Please open in a browser.'),
-        actions: [
-          TextButton(
-            child: const Text('OK'),
-            onPressed: () async {
-              Navigator.pop(context);
-
-              // (1) optional: go back if possible, else just keep current state
-              if (_controller != null && await _controller!.canGoBack()) {
-                await _controller!.goBack();
-              }
-
-              // (2) show spinner for 3 seconds
-              await _showTemporarySpinner(2);
-
-              // (3) navigate to explicit login page
-              _controller?.loadRequest(Uri.parse(loginUrl));
-            },
-          ),
-        ],
-      ),
-    );
   }
 
   Future<bool> _onWillPop() async {
@@ -148,20 +122,29 @@ class _WebViewScreenState extends State<WebViewScreen> {
           backgroundColor: Colors.white,
           elevation: 1,
           actions: [
-            IconButton(icon: const Icon(Icons.refresh, color: Colors.black), onPressed: _refreshPage),
+            IconButton(
+                icon: const Icon(Icons.refresh, color: Colors.black),
+                onPressed: _refreshPage),
           ],
         ),
         body: hasInternet
-            ? Stack(children: [if (_controller != null) WebViewWidget(controller: _controller!), if (_isLoading) const Center(child: CircularProgressIndicator())])
+            ? Stack(
+          children: [
+            if (_controller != null) WebViewWidget(controller: _controller!),
+            if (_isLoading) const Center(child: CircularProgressIndicator()),
+          ],
+        )
             : Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(Icons.wifi_off, size: 80, color: Colors.red),
               const SizedBox(height: 20),
-              const Text('No internet connection!', style: TextStyle(fontSize: 18)),
+              const Text('No internet connection!',
+                  style: TextStyle(fontSize: 18)),
               const SizedBox(height: 20),
-              ElevatedButton(onPressed: _refreshPage, child: const Text('Try again')),
+              ElevatedButton(
+                  onPressed: _refreshPage, child: const Text('Try again')),
             ],
           ),
         ),
